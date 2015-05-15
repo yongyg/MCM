@@ -8,6 +8,8 @@ source /afs/cern.ch/cms/PPD/PdmV/tools/McM/getCookie.sh
 
 cmsenv
 
+under MCM
+
 ./check_GS.py updateinput
 
 ./check_GS.py RunIIWinter15GS
