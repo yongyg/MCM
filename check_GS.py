@@ -24,16 +24,12 @@ def get_rootID(prepid):
 
 chains = {'pu1':['RunIISpring15DR74Startup25ns','RunIISpring15DR74Startup25nswmLHE','RunIISpring15DR74Startup25nspLHE'], 
           'pu2':['RunIISpring15DR74Startup50ns','RunIISpring15DR74Startup50nswmLHE','RunIISpring15DR74Startup50nspLHE'], 
-          'pu3':['RunIISpring15DR74NoPU','RunIISpring15DR74NoPUwmLHE','RunIISpring15DR74NoPUpLHE'],
-          'pu4':['RunIISpring15DR74NoPURaw','RunIISpring15DR74NoPURawwmLHE','RunIISpring15DR74NoPURawpLHE'],
-          'pu5':['RunIISpring15DR74Startup25nsRaw','RunIISpring15DR74Startup25nsRawwmLHE','RunIISpring15DR74Startup25nsRawpLHE'],                     
-          'pu6':['RunIISpring15DR74Startup50nsRaw','RunIISpring15DR74Startup50nsRawwmLHE','RunIISpring15DR74Startup50nsRawpLHE'], 
-          'pu7':['RunIISpring15DR74NoPUAsympt','RunIISpring15DR74NoPUAsymptwmLHE','RunIISpring15DR74NoPUAsymptpLHE'],
-          'pu8':['RunIISpring15DR74NoPUAsymptRawReco','RunIISpring15DR74NoPUAsymptRawRecowmLHE','RunIISpring15DR74NoPUAsymptRawRecopLHE'],
-          'pu9':['RunIISpring15DR74NoPUAsymptReco','RunIISpring15DR74NoPUAsymptRecowmLHE','RunIISpring15DR74NoPUAsymptRecopLHE']
+          'pu3':['RunIISpring15DR74Startup25nsRaw','RunIISpring15DR74Startup25nsRawwmLHE','RunIISpring15DR74Startup25nsRawpLHE'],           
+          'pu4':['RunIISpring15DR74Startup50nsRaw','RunIISpring15DR74Startup50nsRawwmLHE','RunIISpring15DR74Startup50nsRawpLHE'],
+          'pu5':['RunIISpring15DR74AsymptFlat10to5025nsRaw','RunIISpring15DR74AsymptFlat10to5025nsRawwmLHE','RunIISpring15DR74AsymptFlat10to5025nsRawpLHE'],
+          'pu6':['RunIISpring15DR74StartupFlat10to5050nsRaw','RunIISpring15DR74StartupFlat10to5050nsRawwmLHE','RunIISpring15DR74StartupFlat10to5050nsRawpLHE']
           }
-
-nPU = 9
+nPU = 6
 
 def chain(pu,prepid):
     if prepid.split('-')[1] == 'RunIIWinter15GS': return chains[pu][0]
@@ -98,13 +94,17 @@ def get_evt(b):
     if b.rfind('-') >= 0:
         if b[b.rfind('-')+1:].isdigit():
             evt = int( b[b.rfind('-')+1:])
-        else:
-            print 'warning all events for this tag! ', b 
+        #else:
+            #print 'warning all events for this tag! ', b 
     
     return evt
 
 def is_raw(b):
     return b.find('Raw') >=0 or b.find('RAW') >=0
+
+
+def is_reco(b):
+    return b.find('Reco') >=0 or b.find('RECO') >=0
 
 
 def check_chains(rid):
@@ -116,6 +116,17 @@ def check_chains(rid):
                 vch.append(hist['step'].split('_')[-1].split('-')[0])
     
     return vch
+
+
+def check_chained_request(prepid):
+    crs = mcm.getA('chained_requests', query='contains=%s'%(prepid))
+
+    for cr in crs:
+        if cr['prepid'].find('RunIISpring15DR74') >= 0:
+            if cr['chain'][-1].find('RunIISpring15DR74') < 0:
+                return False
+
+    return True
         
 
 def main(args):
@@ -196,11 +207,13 @@ def main(args):
     
 
     ffwarning = open('warning.txt',"w+") 
+    ff_forceflow = open('need_force_flow.txt',"w+")
+
 
     for cr in crs:
         prepid = cr['prepid']
         stat = cr['status']
-        evt = cr['total_events']
+        evt_tot = cr['total_events']
         evt_complete = cr['completed_events']
         tag = cr['tags']
 
@@ -220,24 +233,19 @@ def main(args):
         
         Is25ns = True
         Is25nsRaw = False
+        Is25nsdrHighPrio = False
 
         Is50ns = False
         Is50nsRaw = False
 
-        IsNoPU = False
-        IsNoPURaw = False
-
-
-        Is25nsdrHighPrio = False
-        Is25nsdrHighPrioRaw = False
-
-        IsNoPUAsympt = False
-        IsNoPUAsymptRawReco = False
-        IsNoPUAsymptReco = False
-
-        evt = 0 ##all events  
+        evt25ns = 0 
         evt50ns = 0 
-        evtnopu = 0 
+
+        IsAsymptFlat10to5025nsRaw = False
+        evtAsymptFlat10to5025nsRaw = 0
+        
+        IsStartupFlat10to5050nsRaw = False
+        evtStartupFlat10to5050nsRaw = 0
 
 
         for b in tag:
@@ -247,54 +255,69 @@ def main(args):
                 if is_raw(b): 
                     Is50nsRaw = True
                     Is50ns = False
-
-
+                if is_reco(b):
+                    print 'is_reco_not_implemented!!',tag,prepid
+                    sys.exit(1)
+                    
+                if is_raw(b) and is_reco(b):
+                    print 'is_raw_and_reco_not_implemented!!',tag,prepid
+                    sys.exit(1)
+        
             if b.find('no25ns') >=0:
                 Is25ns = False
 
-            if (b.find('NoPileUp') >= 0 or b.find('NoPile') >= 0) and b.find('Asympt') <0 : 
-                IsNoPU = True
-                evtnopu = get_evt(b)
+            if b.find('25nsdr') >=0:
+                evt25ns = get_evt(b)
+                Is25nsdrHighPrio =  b.find('HighPrio')>=0
+                evt25ns = get_evt(b)
                 if is_raw(b):
-                    IsNoPURaw = True
-                    IsNoPU = False
-    
-            if b.find('25nsdrHighPrio') >= 0: 
-                Is25nsdrHighPrio = True
-                evt = get_evt(b)
-                if is_raw(b):
-                    Is25nsdrHighPrioRaw = True
-                    Is25nsdrHighPrio = False
-
-
-            if b.find('NoPileUpAsymptoticRawReco') >=0:
-                IsNoPUAsymptRawReco = True
-            elif b.find('NoPileUpAsymptoticReco') >=0:    
-                IsNoPUAsymptReco = True
-            elif b.find('NoPileUpAsymptotic') >=0:    
-                IsNoPUAsympt = True
+                    Is25nsRaw = True
+                    Is25ns = False
+                if is_reco(b):
+                    print 'is_reco_not_implemented!!',tag,prepid
+                    sys.exit(1)
                 
+                if is_raw(b) and is_reco(b):
+                    print 'is_raw_and_reco_not_implemented!!',tag,prepid
+                    sys.exit(1)
+
+            if b.find('AsymptFlat10to5025nsRaw')  >=0:
+                IsAsymptFlat10to5025nsRaw = True
+                evtAsymptFlat10to5025nsRaw = get_evt(b)
+
+            if b.find('StartupFlat10to5050nsRaw')  >=0:
+                IsStartupFlat10to5050nsRaw = True
+                evtStartupFlat10to5050nsRaw = get_evt(b)
+                
+                
+        if Is25nsRaw and Is25ns: 
+            print 'waring both Is25nsRaw and Is25ns ?', prepid
+            sys.exit(1)
             
-        if Is25nsdrHighPrioRaw and Is25ns: 
-            Is25ns = False
 
         if stat != 'done': continue
                 
-        if evt > evt_complete or evt50ns > evt_complete or evtnopu > evt_complete : 
-            print 'evt_asked > evt_complete ? ', evt, evt50ns, evtnopu, evt_complete, prepid
+        if evt25ns > evt_complete or evt50ns > evt_complete :
+            print 'evt_asked > evt_complete ? ', evt25ns, evt50ns, evt_complete, prepid
             sys.exit(1)
+
+        if evt_complete < 0.95 * evt_tot:
+            if check_chained_request(prepid) == False:
+                text = "evt_complete/done=%d/%d\n"%(evt_complete,evt_tot)
+                ff_forceflow.write(text)
+                text = 'https://cms-pdmv.cern.ch/mcm/chained_requests?contains=%s&page=0&shown=15\n'%prepid
+                ff_forceflow.write(text)
+    
 
         
         vvc = []
         vvc.append(Is25ns)
         vvc.append(Is50ns)
-        vvc.append(IsNoPU)
-        vvc.append(IsNoPURaw)
-        vvc.append(Is25nsdrHighPrioRaw)
+        vvc.append(Is25nsRaw)
         vvc.append(Is50nsRaw)
-        vvc.append(IsNoPUAsympt)
-        vvc.append(IsNoPUAsymptRawReco)
-        vvc.append(IsNoPUAsymptReco)
+        vvc.append(IsAsymptFlat10to5025nsRaw)
+        vvc.append(IsStartupFlat10to5050nsRaw)
+
 
         chaindone = True
         if allchains_done.has_key(prepid): 
@@ -328,7 +351,7 @@ def main(args):
         if allrequests.has_key(rootid) == False:   ##only one rootID (last one) saved into allrequests!!!
             allrequests[rootid] = []
             if Is25ns: 
-                allrequests[rootid].append(evt) ##evt
+                allrequests[rootid].append(evt25ns) ##evt
                 if Is25nsdrHighPrio: allrequests[rootid].append(3) ##block
                 else: allrequests[rootid].append(4) ##block
 
@@ -343,23 +366,10 @@ def main(args):
                 allrequests[rootid].append(-1)
                 allrequests[rootid].append(0)
 
-            if IsNoPU:
-                allrequests[rootid].append(evtnopu) ##evt                                                                                                                                      
-                allrequests[rootid].append(2) ##block     
-            else:
-                allrequests[rootid].append(-1)
-                allrequests[rootid].append(0)
-
-            if IsNoPURaw:
-                allrequests[rootid].append(evtnopu) ##evt                                                                                                                                     
-                allrequests[rootid].append(2) ##block     
-            else:
-                allrequests[rootid].append(-1)
-                allrequests[rootid].append(0)
-             
-            if Is25nsdrHighPrioRaw:
-                allrequests[rootid].append(evt) ##evt 
-                allrequests[rootid].append(3)
+            if Is25nsRaw:
+                allrequests[rootid].append(evt25ns) ##evt 
+                if Is25nsdrHighPrio: allrequests[rootid].append(3) ##block                                                                                                                                  
+                else: allrequests[rootid].append(4) ##block 
             else: 
                 allrequests[rootid].append(-1)
                 allrequests[rootid].append(0)
@@ -371,28 +381,19 @@ def main(args):
                 allrequests[rootid].append(-1)
                 allrequests[rootid].append(0)
    
-            if IsNoPUAsympt:
-                allrequests[rootid].append(evt) ##evt                                                                                                                                         
-                allrequests[rootid].append(2)
+            if IsAsymptFlat10to5025nsRaw:
+                allrequests[rootid].append(evtAsymptFlat10to5025nsRaw)
+                allrequests[rootid].append(3)
             else:
                 allrequests[rootid].append(-1)
                 allrequests[rootid].append(0)
-                
-            if IsNoPUAsymptRawReco:
-                allrequests[rootid].append(evt) ##evt                                                                                                                                         
-                allrequests[rootid].append(2)
-            else:
-                allrequests[rootid].append(-1)
-                allrequests[rootid].append(0)
-                
-            if IsNoPUAsymptReco:
-                allrequests[rootid].append(evt) ##evt                                                                                                                                         
-                allrequests[rootid].append(2)
-            else:
-                allrequests[rootid].append(-1)
-                allrequests[rootid].append(0)
-                
 
+            if IsStartupFlat10to5050nsRaw:
+                allrequests[rootid].append(evtStartupFlat10to5050nsRaw)
+                allrequests[rootid].append(3)
+            else:
+                allrequests[rootid].append(-1)
+                allrequests[rootid].append(0)
 
 
     if updateinput:
@@ -451,7 +452,7 @@ def main(args):
                     elif allrequests[rid][i*2+1]==3:  l2.append(rid)
                     elif allrequests[rid][i*2+1]==4:  l3.append(rid)
                     else:
-                        print 'block?? ',allrequests[rid][i*2+1]
+                        print 'block_0_allstat?? ',allrequests[rid][i*2+1],idgs
                         sys.exit(1)
 
 
@@ -506,7 +507,7 @@ def main(args):
                         elif allrequests[rid][i*2+1]==3:  pl2.append(rid)
                         elif allrequests[rid][i*2+1]==4:  pl3.append(rid)
                         else:
-                            print 'block?? ',allrequests[rid][i*2+1]
+                            print 'block_0_partstat?? ',allrequests[rid][i*2+1],idgs
                             sys.exit(1)
 
                 if len(pl1) >= 1:
